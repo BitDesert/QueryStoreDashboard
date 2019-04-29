@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Report MustUnderstand="df" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:df="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily">
   <df:DefaultFontFamily>Segoe UI</df:DefaultFontFamily>
   <AutoRefresh>0</AutoRefresh>
@@ -18,7 +18,7 @@
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
         <CommandText>DECLARE @dbname VARCHAR(50)
-DECLARE @sql NVARCHAR(1000)
+DECLARE @SQL NVARCHAR(1000)
 
 -- Check if temp table exists, if it does drop it
 IF OBJECT_ID('tempdb..#qsi_uniquequeries') IS NOT NULL
@@ -36,7 +36,7 @@ CREATE TABLE #qsi_uniquequeries
 -- We need to use a cursor to move through the databases
 -- that have the Query Store enabled so we can gran data from it
 DECLARE dbname_cursor CURSOR FOR
-	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1
+	SELECT [name] FROM sys.databases WHERE is_query_store_on = 1
 
 OPEN dbname_cursor
 	FETCH NEXT FROM dbname_cursor INTO @dbname
@@ -103,7 +103,7 @@ GROUP BY is_query_store_on</CommandText>
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
         <CommandText>DECLARE @dbname VARCHAR(50)
-DECLARE @sql NVARCHAR(1000)
+DECLARE @SQL NVARCHAR(1000)
 
 -- Check if temp table exists, if it does drop it
 IF OBJECT_ID('tempdb..#qsi_qsconfig') IS NOT NULL
@@ -126,7 +126,7 @@ CREATE TABLE #qsi_qsconfig
 -- We need to use a cursor to move through the databases
 -- that have the Query Store enabled so we can gran data from it
 DECLARE dbname_cursor CURSOR FOR
-	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1 
+	SELECT [name] FROM sys.databases WHERE is_query_store_on = 1 
 
 OPEN dbname_cursor
 	FETCH NEXT FROM dbname_cursor INTO @dbname
@@ -203,37 +203,14 @@ ORDER BY DatabaseName ASC</CommandText>
     <DataSet Name="QS_CPU_Time_Last_hour_total_per_db">
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
-        <CommandText>declare @dbname varchar(50)
-declare @sql nvarchar(2000) /* Check if temp table exists, if it does drop it*/
-
-if OBJECT_ID('tempdb..#qsi_cputimeperdb') is not null
-begin
-	drop table #qsi_cputimeperdb
-end /* Create a temporary table to hold the results*/
-
-create table #qsi_cputimeperdb (
-	DatabaseName varchar(150)
-	, IntervalStart datetime
-	, MinCPUTime float
-	, AvgCPUTime float
-	, MaxCPUTime float
-	) /* that have the Query Store enabled so we can gran data from it*/
-
-declare dbname_cursor cursor
-for
-select QUOTENAME([name])
-from sys.databases
-where is_query_store_on = 1
-
-open dbname_cursor
-
-fetch next
-from dbname_cursor
-into @dbname
-
-while @@FETCH_STATUS = 0
-begin
-	set @SQL = 'INSERT INTO #qsi_cputimeperdb
+        <CommandText>DECLARE @dbname VARCHAR(50) DECLARE @SQL NVARCHAR(2000) /* Check if temp table exists, if it does drop it*/ IF OBJECT_ID('tempdb..#qsi_cputimeperdb') IS NOT NULL 
+BEGIN DROP TABLE #qsi_cputimeperdb END /* Create a temporary table to hold the results*/ CREATE TABLE #qsi_cputimeperdb(DatabaseName VARCHAR(150), IntervalStart DATETIME, MinCPUTime FLOAT, 
+AvgCPUTime FLOAT, MaxCPUTime FLOAT) /* that have the Query Store enabled so we can gran data from it*/ DECLARE dbname_cursor CURSOR FOR SELECT        [name]
+                                                                                                                                                                                                                                                                                                                                    FROM            sys.databases
+                                                                                                                                                                                                                                                                                                                                    WHERE        is_query_store_on = 1 OPEN dbname_cursor FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname WHILE @@FETCH_STATUS = 0 BEGIN
+SET                @SQL = 'INSERT INTO #qsi_cputimeperdb
 						(
 						DatabaseName,
 						IntervalStart,
@@ -247,43 +224,23 @@ begin
 					    SUM(qsrs.min_cpu_time) AS ''Min CPU Time'', 
 					    SUM(qsrs.avg_cpu_time) AS ''Avg CPU Time'', 
 					    SUM(qsrs.max_cpu_time) AS ''Max CPU Time''
-					  FROM ' + @dbname + '.sys.query_store_runtime_stats AS qsrs 
-					  INNER JOIN ' + @dbname + 
-		'.sys.query_store_runtime_stats_interval AS qsrsi 
+					  FROM '
+                          + @dbname + '.sys.query_store_runtime_stats AS qsrs 
+					  INNER JOIN ' + @dbname + '.sys.query_store_runtime_stats_interval AS qsrsi 
 					  ON qsrs.runtime_stats_interval_id = qsrsi.runtime_stats_interval_id
 					  WHERE (CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.start_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) &gt;= DATEADD(hour, - 4, GETDATE()))
 					  GROUP BY CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.start_time), DATENAME(TzOffset, SYSDATETIMEOFFSET())))
 					  ORDER BY ''Interval Start''
 					  '
-
-	exec sp_executesql @SQL
-
-	fetch next
-	from dbname_cursor
-	into @dbname
-end
-
-close dbname_cursor
-
-deallocate dbname_cursor
-
-/* Select all the data from the temporary table*/
-select DatabaseName
-	, IntervalStart
-	, MinCPUTime
-	, AvgCPUTime
-	, MaxCPUTime
-from #qsi_cputimeperdb
-
-union all
-
-select 'Total' as 'DBName'
-	, IntervalStart
-	, SUM(MinCPUTime) as 'TotalMinCPU'
-	, SUM(AvgCPUTime) as 'TotalAvgCPU'
-	, SUM(MaxCPUTime) as 'TotalMaxCPU'
-from #qsi_cputimeperdb
-group by IntervalStart</CommandText>
+                          EXEC sp_executesql @SQL FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname END CLOSE dbname_cursor DEALLOCATE dbname_cursor
+                             /* Select all the data from the temporary table*/ SELECT DatabaseName, IntervalStart, MinCPUTime, AvgCPUTime, MaxCPUTime
+                              FROM            #qsi_cputimeperdb
+UNION ALL
+SELECT        'Total' AS 'DBName', IntervalStart, SUM(MinCPUTime) AS 'TotalMinCPU', SUM(AvgCPUTime) AS 'TotalAvgCPU', SUM(MaxCPUTime) AS 'TotalMaxCPU'
+FROM            #qsi_cputimeperdb
+GROUP BY IntervalStart</CommandText>
       </Query>
       <Fields>
         <Field Name="DatabaseName">
@@ -311,36 +268,14 @@ group by IntervalStart</CommandText>
     <DataSet Name="QS_Logical_Reads_Last_Hour_total_per_db">
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
-        <CommandText>declare @dbname varchar(50)
-declare @sql nvarchar(2000) /* Check if temp table exists, if it does drop it*/
-
-if OBJECT_ID('tempdb..#qsi_lio_read_perdb') is not null
-begin
-	drop table #qsi_lio_read_perdb
-end /* Create a temporary table to hold the results*/
-
-create table #qsi_lio_read_perdb (
-	DatabaseName varchar(150)
-	, IntervalStart datetime
-	, AvgLogicalIORead float
-	)
-
-/* that have the Query Store enabled so we can gran data from it*/
-declare dbname_cursor cursor
-for
-select QUOTENAME([name])
-from sys.databases
-where is_query_store_on = 1
-
-open dbname_cursor
-
-fetch next
-from dbname_cursor
-into @dbname
-
-while @@FETCH_STATUS = 0
-begin
-	set @SQL = 'INSERT INTO #qsi_lio_read_perdb
+        <CommandText>DECLARE @dbname VARCHAR(50) DECLARE @SQL NVARCHAR(2000) /* Check if temp table exists, if it does drop it*/ IF OBJECT_ID('tempdb..#qsi_lio_read_perdb') IS NOT NULL 
+BEGIN DROP TABLE #qsi_lio_read_perdb END /* Create a temporary table to hold the results*/ CREATE TABLE #qsi_lio_read_perdb(DatabaseName VARCHAR(150), IntervalStart DATETIME, AvgLogicalIORead FLOAT) 
+/* that have the Query Store enabled so we can gran data from it*/ DECLARE dbname_cursor CURSOR FOR SELECT        [name]
+                                                                                                                                                                                                                                       FROM            sys.databases
+                                                                                                                                                                                                                                       WHERE        is_query_store_on = 1 OPEN dbname_cursor FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname WHILE @@FETCH_STATUS = 0 BEGIN
+SET                @SQL = 'INSERT INTO #qsi_lio_read_perdb
 						(
 						DatabaseName,
 						IntervalStart,
@@ -350,38 +285,23 @@ begin
 						''' + @dbname + ''',
 					    CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.start_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) AS ''Interval Start'', 
 					    SUM(qsrs.avg_logical_io_reads) AS ''Avg Logical IO Read'' 
-					  FROM ' + @dbname + '.sys.query_store_runtime_stats AS qsrs 
+					  FROM '
+                          + @dbname + '.sys.query_store_runtime_stats AS qsrs 
 					  INNER JOIN ' + @dbname + '.sys.query_store_runtime_stats_interval AS qsrsi 
 					  ON qsrs.runtime_stats_interval_id = qsrsi.runtime_stats_interval_id
 					  WHERE (CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.start_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) &gt;= DATEADD(hour, - 4, GETDATE()))
 					  GROUP BY CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.start_time), DATENAME(TzOffset, SYSDATETIMEOFFSET())))
 					  ORDER BY ''Interval Start''
 					  '
-
-	exec sp_executesql @SQL
-
-	fetch next
-	from dbname_cursor
-	into @dbname
-end
-
-close dbname_cursor
-
-deallocate dbname_cursor
-
-/* Select all the data from the temporary table*/
-select DatabaseName
-	, IntervalStart
-	, AvgLogicalIORead
-from #qsi_lio_read_perdb
-
-union all
-
-select 'Total' as 'DBName'
-	, IntervalStart
-	, SUM(AvgLogicalIORead) as 'TotalAvgLogicalIORead'
-from #qsi_lio_read_perdb
-group by IntervalStart</CommandText>
+                          EXEC sp_executesql @SQL FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname END CLOSE dbname_cursor DEALLOCATE dbname_cursor
+                             /* Select all the data from the temporary table*/ SELECT DatabaseName, IntervalStart, AvgLogicalIORead
+                              FROM            #qsi_lio_read_perdb
+UNION ALL
+SELECT        'Total' AS 'DBName', IntervalStart, SUM(AvgLogicalIORead) AS 'TotalAvgLogicalIORead'
+FROM            #qsi_lio_read_perdb
+GROUP BY IntervalStart</CommandText>
       </Query>
       <Fields>
         <Field Name="DatabaseName">
@@ -402,7 +322,7 @@ group by IntervalStart</CommandText>
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
         <CommandText>DECLARE @dbname VARCHAR(50)
-DECLARE @sql NVARCHAR(2000)
+DECLARE @SQL NVARCHAR(2000)
 
 -- Check if temp table exists, if it does drop it
 IF OBJECT_ID('tempdb..#qsi_query_exec') IS NOT NULL
@@ -421,7 +341,7 @@ CREATE TABLE #qsi_query_exec
 -- We need to use a cursor to move through the databases
 -- that have the Query Store enabled so we can gran data from it
 DECLARE dbname_cursor CURSOR FOR
-	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1 
+	SELECT [name] FROM sys.databases WHERE is_query_store_on = 1 
 
 OPEN dbname_cursor
 	FETCH NEXT FROM dbname_cursor INTO @dbname
@@ -484,7 +404,7 @@ FROM #qsi_query_exec
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
         <CommandText>DECLARE @dbname VARCHAR(50)
-DECLARE @sql NVARCHAR(2000)
+DECLARE @SQL NVARCHAR(2000)
 
 -- Check if temp table exists, if it does drop it
 IF OBJECT_ID('tempdb..#qsi_avgio_write') IS NOT NULL
@@ -503,7 +423,7 @@ CREATE TABLE #qsi_avgio_write
 -- We need to use a cursor to move through the databases
 -- that have the Query Store enabled so we can gran data from it
 DECLARE dbname_cursor CURSOR FOR
-	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1 
+	SELECT [name] FROM sys.databases WHERE is_query_store_on = 1 
 
 OPEN dbname_cursor
 	FETCH NEXT FROM dbname_cursor INTO @dbname
@@ -572,40 +492,17 @@ GROUP BY IntervalStart
     <DataSet Name="QS_LongRunning_Queries_Last_24_hours_per_database">
       <Query>
         <DataSourceName>LocalServer</DataSourceName>
-        <CommandText>declare @dbname varchar(50)
-declare @sql nvarchar(2000) /* Check if temp table exists, if it does drop it*/
-
-if OBJECT_ID('tempdb..#qsi_last_exp_queries') is not null
-begin
-	drop table #qsi_last_exp_queries
-end /* Create a temporary table to hold the results*/
-
-create table #qsi_last_exp_queries (
-	DatabaseName varchar(150)
-	, QueryID int
-	, avgDuration float
-	, minDuration float
-	, maxDuration float
-	, CompatLvl varchar(50)
-	, LastRun datetime
-	, QueryText varchar(250)
-	) /* that have the Query Store enabled so we can gran data from it*/
-
-declare dbname_cursor cursor
-for
-select QUOTENAME([name])
-from sys.databases
-where is_query_store_on = 1
-
-open dbname_cursor
-
-fetch next
-from dbname_cursor
-into @dbname
-
-while @@FETCH_STATUS = 0
-begin
-	set @SQL = 'INSERT INTO #qsi_last_exp_queries
+        <CommandText>DECLARE @dbname VARCHAR(50) DECLARE @SQL NVARCHAR(2000) /* Check if temp table exists, if it does drop it*/ IF OBJECT_ID('tempdb..#qsi_last_exp_queries') IS NOT NULL 
+BEGIN DROP TABLE #qsi_last_exp_queries END /* Create a temporary table to hold the results*/ CREATE TABLE #qsi_last_exp_queries(DatabaseName VARCHAR(150), QueryID INT, avgDuration FLOAT, minDuration FLOAT, 
+maxDuration FLOAT, CompatLvl VARCHAR(50), LastRun DATETIME, QueryText VARCHAR(250)) /* that have the Query Store enabled so we can gran data from it*/ DECLARE dbname_cursor CURSOR FOR SELECT        [name]
+                                                                                                                                                                                                                                                                                                                                                                                                                                                   FROM            sys.databases
+                                                                                                                                                                                                                                                                                                                                                                                                                                                   WHERE        is_query_store_on
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              = 1 OPEN
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              dbname_cursor
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname WHILE @@FETCH_STATUS = 0 BEGIN
+SET                @SQL = 'INSERT INTO #qsi_last_exp_queries
 						(
 						DatabaseName,
 						QueryID,
@@ -630,27 +527,16 @@ begin
 					  ON qsrs.plan_id = qsp.plan_id
 					  INNER JOIN ' + @dbname + '.sys.query_store_query qsq
 					  ON qsp.query_id = qsq.query_id
-					  INNER JOIN ' + @dbname + 
-		'.sys.query_store_query_text qsqt
+					  INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt
 					  ON qsq.query_text_id = qsqt.query_text_id
 					  WHERE (CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsq.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) &gt;= DATEADD(hour, -24, GETDATE()))
 					  ORDER BY qsrs.avg_duration DESC
 					  '
-
-	exec sp_executesql @SQL
-
-	fetch next
-	from dbname_cursor
-	into @dbname
-end
-
-close dbname_cursor
-
-deallocate dbname_cursor
-
-/* Select all the data from the temporary table*/
-select *
-from #qsi_last_exp_queries</CommandText>
+                          EXEC sp_executesql @SQL FETCH NEXT
+FROM            dbname_cursor
+INTO              @dbname END CLOSE dbname_cursor DEALLOCATE dbname_cursor
+                             /* Select all the data from the temporary table*/ SELECT *
+                              FROM            #qsi_last_exp_queries</CommandText>
         <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
       </Query>
       <Fields>
